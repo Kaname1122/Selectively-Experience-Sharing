@@ -1,7 +1,3 @@
-# PPOやA2Cで使われる、経験データを格納してミニバッチを生成するためのクラス
-
-
-
 import torch
 from torch.utils.data.sampler import BatchSampler, SubsetRandomSampler
 
@@ -43,7 +39,6 @@ class RolloutStorage(object):
         self.num_steps = num_steps
         self.step = 0
 
-    # tensorの計算をdeviceに移す関数、device=(cpu or cuda)
     def to(self, device):
         self.obs = self.obs.to(device)
         self.recurrent_hidden_states = self.recurrent_hidden_states.to(device)
@@ -55,7 +50,6 @@ class RolloutStorage(object):
         self.masks = self.masks.to(device)
         self.bad_masks = self.bad_masks.to(device)
 
-    # エピソードデータを挿入
     def insert(
         self,
         obs,
@@ -84,7 +78,6 @@ class RolloutStorage(object):
         self.masks[0].copy_(self.masks[-1])
         self.bad_masks[0].copy_(self.bad_masks[-1])
 
-    # 割引収益の計算
     def compute_returns(
         self, next_value, use_gae, gamma, gae_lambda, use_proper_time_limits=True
     ):
@@ -132,7 +125,6 @@ class RolloutStorage(object):
                         + self.rewards[step]
                     )
 
-    # ミニバッチを生成するためのジェネレータ
     def feed_forward_generator(
         self, advantages, num_mini_batch=None, mini_batch_size=None
     ):

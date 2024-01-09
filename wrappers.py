@@ -7,10 +7,9 @@ import gym
 import numpy as np
 from gym import ObservationWrapper, spaces
 from gym.wrappers import TimeLimit as GymTimeLimit
-from gym.wrappers import RecordVideo as GymMonitor
+from gym.wrappers import Monitor as GymMonitor
 
 
-# 各エピソードの統計情報を記録するクラス
 class RecordEpisodeStatistics(gym.Wrapper):
     """ Multi-agent version of RecordEpisodeStatistics gym wrapper"""
 
@@ -22,7 +21,6 @@ class RecordEpisodeStatistics(gym.Wrapper):
         self.reward_queue = deque(maxlen=deque_size)
         self.length_queue = deque(maxlen=deque_size)
 
-    # 環境をリセット
     def reset(self, **kwargs):
         observation = super().reset(**kwargs)
         self.episode_reward = 0
@@ -31,12 +29,10 @@ class RecordEpisodeStatistics(gym.Wrapper):
 
         return observation
 
-    # 環境に対してエージェントがアクションを実行する
     def step(self, action):
         observation, reward, done, info = super().step(action)
         self.episode_reward += np.array(reward, dtype=np.float64)
         self.episode_length += 1
-        # エピソードが終了したら統計情報をinfoに追加
         if all(done):
             info["episode_reward"] = self.episode_reward
             for i, agent_reward in enumerate(self.episode_reward):
@@ -44,13 +40,11 @@ class RecordEpisodeStatistics(gym.Wrapper):
             info["episode_length"] = self.episode_length
             info["episode_time"] = perf_counter() - self.t0
 
-            # エピソードの報酬とステップ数を追加
             self.reward_queue.append(self.episode_reward)
             self.length_queue.append(self.episode_length)
         return observation, reward, done, info
 
 
-# 各エージェントの観測を平坦化する
 class FlattenObservation(ObservationWrapper):
     r"""Observation wrapper that flattens the observation of individual agents."""
 
@@ -79,7 +73,6 @@ class FlattenObservation(ObservationWrapper):
         ])
 
 
-# 全エージェントのdoneフラグがTrueのときに全体としてのdoneフラグをTrueにする
 class SquashDones(gym.Wrapper):
     r"""Wrapper that squashes multiple dones to a single one using all(dones)"""
 
@@ -88,13 +81,11 @@ class SquashDones(gym.Wrapper):
         return observation, reward, all(done), info
 
 
-# 各エージェントが受け取る報酬を合計してその合計値を全てのエージェントの報酬とする
 class GlobalizeReward(gym.RewardWrapper):
     def reward(self, reward):
         return self.n_agents * [sum(reward)]
 
 
-# エピソードの制限時間処理
 class TimeLimit(GymTimeLimit):
     def __init__(self, env, max_episode_steps=None):
         super().__init__(env)
@@ -120,7 +111,6 @@ class ClearInfo(gym.Wrapper):
         return observation, reward, done, {}
 
 
-# エピソードごとの統計情報やビデオの記録
 class Monitor(GymMonitor):
     def _after_step(self, observation, reward, done, info):
         if not self.enabled: return done
