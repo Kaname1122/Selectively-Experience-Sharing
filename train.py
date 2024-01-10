@@ -43,7 +43,7 @@ config = {
     ),
     "dummy_vecenv" : False,
 
-    "num_env_steps" : 1e6,  # 先行研究は100e6(=1e8)
+    "num_env_steps" : 5e7,  # 先行研究は100e6(=1e8)
 
     "eval_dir" : "./results/video/{id}",
     "loss_dir" : "./results/loss/{id}",
@@ -56,8 +56,8 @@ config = {
 }
 
 run = wandb.init(
-    project="proposal_test",
-    name="sesac_foraging_1e6",
+    project="lab",
+    name="sesac_foraging_5e7",
     config=config,
 )
 
@@ -216,17 +216,6 @@ def main(
     environment_steps = 0
     for j in range(1, num_updates + 1 + pretraining_steps):
         environment_steps += algorithm["num_steps"] * algorithm["num_envs"]
-        # -----for clustering-----
-        if j == pretraining_steps:
-            print(f"Pretraining at step: {j}")
-            # list型でとりたいのでtensorからtolist()を使って変更
-            cluster_idx = compute_clusters(rb.get_all_transitions(), agent_count).tolist()
-            pickle.dump(rb.get_all_transitions(), open(f"{env_name}.p", "wb"))
-            logging.info(f"cluster_idx: {cluster_idx}")
-            # wandb
-            columns = [f"agent_{i}" for i in range(len(cluster_idx))]
-            wandb.log({"cluster_idx": wandb.Table(columns=columns, data=[cluster_idx])})
-        # ------------------------
 
         for step in range(algorithm["num_steps"]):
             # Sample actions
@@ -273,13 +262,13 @@ def main(
                     one_hot_agent = torch.nn.functional.one_hot(torch.tensor(agent_id), agent_count).repeat(algorithm["num_envs"], 1).numpy()
 
                     if not bad_masks[0]:
-                        nobs = info[0]["terminal_observation"]
+                        nobs = infos[0]["terminal_observation"]
                         nobs = [torch.tensor(o).unsqueeze(0) for o in nobs]
                     else:
                         nobs = obs
 
                     data = {
-                        "obs": agent[agent_id].storage.obs[agent_id].numpy(),
+                        "obs": agents[agent_id].storage.obs[agent_id].numpy(),
                         "act": one_hot_action,
                         "next_obs": nobs[agent_id].numpy(),
                         "rew":  reward[:, agent_id].unsqueeze(-1).numpy(),
@@ -295,6 +284,18 @@ def main(
             for info in infos:
                 if info:
                     all_infos.append(info)
+
+        # -----for clustering-----
+        if j == pretraining_steps:
+            print(f"Pretraining at step: {j}")
+            # list型でとりたいのでtensorからtolist()を使って変更
+            cluster_idx = compute_clusters(rb.get_all_transitions(), agent_count).tolist()
+            pickle.dump(rb.get_all_transitions(), open(f"{env_name}.p", "wb"))
+            logging.info(f"cluster_idx: {cluster_idx}")
+            # wandb
+            columns = [f"agent_{i}" for i in range(len(cluster_idx))]
+            wandb.log({"cluster_idx": wandb.Table(columns=columns, data=[cluster_idx])})
+        # ------------------------
 
         # for clustering
         if j < pretraining_steps:

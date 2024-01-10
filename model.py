@@ -307,12 +307,12 @@ clustering_config = {
     "clusters": None,
     "lr": 3e-4,
     "epochs": 10,
-    "z_features": 10,
+    "z_features": 10,  # zの次元
 
     "kl_weight": 0.0001,
     "delay_training": False,
 
-    "human_selected_idx": False,
+    "human_selected_idx": None,
 
     "encoder_in": ["agent"],
     "decoder_in": ["obs", "act"],
@@ -429,7 +429,7 @@ def compute_clusters(
 
 # クラスタリングの結果を可視化するためのプロットを作成
 def plot_clusters(cluster_centers, z, human_selected_idx=clustering_config["human_selected_idx"]):
-
+    fig = plt.figure()
     # 人が明示的にIDを設定していない場合
     if human_selected_idx is None:
         plt.plot(z[:, 0], z[:, 1], 'o')
@@ -444,10 +444,16 @@ def plot_clusters(cluster_centers, z, human_selected_idx=clustering_config["huma
             plt.plot(z[i, 0], z[i, 1], 'o' + colors[human_selected_idx[i]])
 
         plt.plot(cluster_centers[:, 0], cluster_centers[:, 1], 'x')
-    with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as tmpfile:
-        plt.savefig(tmpfile, format="png") # File position is at the end of the file.
-        fig = plt.figure()
-        wandb.log({"cluster_image": wandb.Image(fig)})
+
+    plt.savefig("cluster.png") # File position is at the end of the file.
+    # for logging image to wandb
+    fig.canvas.draw()
+    data = fig.canvas.tostring_rgb()
+    w, h = fig.canvas.get_width_height()
+    c = len(data) // (w * h)
+    img = np.frombuffer(data, dtype=np.uint8).reshape(h, w, c)
+    wandb.log({"Image/cluster_image": wandb.Image(img)})
+    plt.close()
     # plt.savefig("cluster.png")
 
 # 与えられたデータセットに対して最適なクラスタ数を見つけるための関数
