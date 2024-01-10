@@ -78,12 +78,6 @@ class A2C:
             "optimizer": self.optimizer,
         }
 
-        wandb.init(
-            project="prior_research",
-            config=algorithm,
-            name="seac_agent",
-        )
-
     def save(self, path):
         torch.save(self.saveables, os.path.join(path, "models.pt"))
 
@@ -154,6 +148,7 @@ class A2C:
         other_agent_ids = same_cluster_idx
         seac_policy_loss = 0
         seac_value_loss = 0
+        importance_sampling = 0
 
         for oid in other_agent_ids:
 
@@ -200,9 +195,9 @@ class A2C:
                 f"agent_{self.agent_id}/policy_loss": policy_loss.item(),
                 f"agent_{self.agent_id}/value_loss": value_loss_coef * value_loss.item(),
                 f"agent_{self.agent_id}/dist_entropy": entropy_coef * dist_entropy.item(),
-                f"agent_{self.agent_id}/importance_sampling": importance_sampling.mean().item(),
-                f"agent_{self.agent_id}/seac_policy_loss": seac_coef * seac_policy_loss.item(),
-                f"agent_{self.agent_id}/seac_value_loss": seac_coef * value_loss_coef * seac_value_loss.item(),
+                f"agent_{self.agent_id}/importance_sampling": importance_sampling.mean().item() if importance_sampling is not 0 else 0,
+                f"agent_{self.agent_id}/seac_policy_loss": seac_coef * seac_policy_loss.item() if seac_policy_loss is not 0 else 0,
+                f"agent_{self.agent_id}/seac_value_loss": seac_coef * value_loss_coef * seac_value_loss.item() if seac_value_loss is not 0 else 0,
             }
         )
 
@@ -210,9 +205,7 @@ class A2C:
             "policy_loss": policy_loss.item(),
             "value_loss": value_loss_coef * value_loss.item(),
             "dist_entropy": entropy_coef * dist_entropy.item(),
-            "importance_sampling": importance_sampling.mean().item(),
-            "seac_policy_loss": seac_coef * seac_policy_loss.item(),
-            "seac_value_loss": seac_coef
-            * value_loss_coef
-            * seac_value_loss.item(),
+            "importance_sampling": importance_sampling.mean().item() if importance_sampling is not 0 else 0,
+            "seac_policy_loss": seac_coef * seac_policy_loss.item() if seac_policy_loss is not 0 else 0,
+            "seac_value_loss": seac_coef * value_loss_coef * seac_value_loss.item() if seac_value_loss is not 0 else 0,
         }
