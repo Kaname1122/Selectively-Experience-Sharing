@@ -19,7 +19,7 @@ from model import Policy, clustering_config, compute_clusters
 
 import wandb
 
-# import rware # noqa
+import rware # noqa
 import lbforaging # noqa
 
 # for clustering
@@ -34,9 +34,9 @@ logging.basicConfig(
 )
 
 config = {
-    "env_name" : "Foraging-15x15-3p-4f-v2",
+    "env_name" : "rware-2color-tiny-4ag-v1",
     "seed": 219,
-    "time_limit" : 25,
+    "time_limit" : 500,
     "wrappers" : (
         RecordEpisodeStatistics,
         SquashDones,
@@ -57,7 +57,7 @@ config = {
 
 run = wandb.init(
     project="lab",
-    name="sesac_foraging_5e7",
+    name="proposal_2color-rware_5e7",
     config=config,
 )
 
@@ -205,6 +205,13 @@ def main(
         "agent": {"shape": agent_count, "dtype": np.float32},
     }
     rb = ReplayBuffer(int(agent_count * pretraining_steps * algorithm["num_envs"] * n_steps), env_dict)
+
+    storage = defaultdict(lambda: deque(maxlen=n_steps))
+    storage["obs"] = deque(maxlen=n_steps + 1)
+    storage["done"] = deque(maxlen=n_steps + 1)
+    storage["obs"].append(obs)
+    storage["done"].append(torch.zeros(algorithm["num_envs"]))
+    storage["info"] = deque(maxlen=10)
     # --------------------------------------------
 
     start = time.time()
@@ -257,6 +264,15 @@ def main(
 
             # ---------------for clustering---------------
             if j < pretraining_steps:
+
+                # for replay buffer
+                storage["obs"].append(obs)
+                storage["actions"].append(n_action)
+                storage["rewards"].append(reward)
+                storage["done"].append(done)
+                storage["info"].extend([i for i in infos if "episode_reward" in i])
+                storage["laac_rewards"] += reward
+
                 for agent_id in range(agent_count):
                     one_hot_action = torch.nn.functional.one_hot(n_action[agent_id], act_size).squeeze().numpy()
                     one_hot_agent = torch.nn.functional.one_hot(torch.tensor(agent_id), agent_count).repeat(algorithm["num_envs"], 1).numpy()
@@ -268,7 +284,7 @@ def main(
                         nobs = obs
 
                     data = {
-                        "obs": agents[agent_id].storage.obs[agent_id].numpy(),
+                        "obs": storage["obs"][-2][agent_id].numpy(),
                         "act": one_hot_action,
                         "next_obs": nobs[agent_id].numpy(),
                         "rew":  reward[:, agent_id].unsqueeze(-1).numpy(),
@@ -297,6 +313,24 @@ def main(
             wandb.log({"cluster_idx": wandb.Table(columns=columns, data=[cluster_idx])})
         # ------------------------
 
+        # for logging
+        if j % config["log_interval"] == 0 and len(all_infos) > 1:
+            squashed = _squash_info(all_infos)
+
+            total_num_steps = (
+                j * algorithm["num_envs"] * algorithm["num_steps"]
+            )
+            end = time.time()
+            logging.info(
+                f"Updates {j}, num timesteps {total_num_steps}, FPS {int(total_num_steps / (end - start))}"
+            )
+            logging.info(
+                f"Last {len(all_infos)} training episodes mean reward {squashed['episode_reward'].sum():.3f}"
+            )
+            squashed["environment_steps"] = environment_steps
+            wandb.log(squashed)
+            all_infos.clear()
+
         # for clustering
         if j < pretraining_steps:
             continue
@@ -316,23 +350,6 @@ def main(
         for agent in agents:
             agent.storage.after_update()
 
-        if j % config["log_interval"] == 0 and len(all_infos) > 1:
-            squashed = _squash_info(all_infos)
-
-            total_num_steps = (
-                j * algorithm["num_envs"] * algorithm["num_steps"]
-            )
-            end = time.time()
-            logging.info(
-                f"Updates {j}, num timesteps {total_num_steps}, FPS {int(total_num_steps / (end - start))}"
-            )
-            logging.info(
-                f"Last {len(all_infos)} training episodes mean reward {squashed['episode_reward'].sum():.3f}"
-            )
-            squashed["environment_steps"] = environment_steps
-            wandb.log(squashed)
-            all_infos.clear()
-
         if config["save_interval"] is not None and (
             j > 0 and j % config["save_interval"] == 0 or j == num_updates + pretraining_steps
         ):
@@ -345,15 +362,15 @@ def main(
             shutil.rmtree(cur_save_dir)
             run.log_artifact(archive_name)
 
-        if config["eval_interval"] is not None and (
-            j > 0 and j % config["eval_interval"] == 0 or j == num_updates + pretraining_steps
-        ):
-            evaluate(
-                agents, os.path.join(eval_dir, f"u{j}"),
-            )
-            videos = glob.glob(os.path.join(eval_dir, f"u{j}") + "/*.mp4")
-            for i, v in enumerate(videos):
-                run.log_artifact(v, f"u{j}.{i}.mp4")
+        # if config["eval_interval"] is not None and (
+        #     j > 0 and j % config["eval_interval"] == 0 or j == num_updates + pretraining_steps
+        # ):
+        #     evaluate(
+        #         agents, os.path.join(eval_dir, f"u{j}"),
+        #     )
+        #     videos = glob.glob(os.path.join(eval_dir, f"u{j}") + "/*.mp4")
+        #     for i, v in enumerate(videos):
+        #         run.log_artifact(v, f"u{j}.{i}.mp4")
     envs.close()
 
 if __name__ == "__main__":

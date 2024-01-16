@@ -304,7 +304,7 @@ clustering_config = {
     "pretraining_times": 1,
 
     "batch_size": 128,
-    "clusters": None,
+    "clusters": 2,
     "lr": 3e-4,
     "epochs": 10,
     "z_features": 10,  # zの次元
